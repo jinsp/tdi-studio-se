@@ -382,7 +382,11 @@ public class BuildJobHandler extends AbstractBuildJobHandler {
 
     protected void buildDelegate(IProgressMonitor monitor) throws Exception {
         final Map<String, Object> argumentsMap = new HashMap<String, Object>();
-        argumentsMap.put(TalendProcessArgumentConstant.ARG_GOAL, TalendMavenConstants.GOAL_PACKAGE);
+        String goal = TalendMavenConstants.GOAL_PACKAGE;
+        if (isOptionChoosed(ExportChoice.pushImage)) {
+            goal = TalendMavenConstants.GOAL_INSTALL;
+        }
+        argumentsMap.put(TalendProcessArgumentConstant.ARG_GOAL, goal);
         argumentsMap.put(TalendProcessArgumentConstant.ARG_PROGRAM_ARGUMENTS, getProgramArgs());
 
         talendProcessJavaProject.buildModules(monitor, null, argumentsMap);

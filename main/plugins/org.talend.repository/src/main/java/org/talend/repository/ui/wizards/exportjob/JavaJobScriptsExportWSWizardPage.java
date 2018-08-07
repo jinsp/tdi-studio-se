@@ -18,6 +18,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.lang3.StringUtils;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.IStatus;
@@ -25,6 +26,7 @@ import org.eclipse.core.runtime.Path;
 import org.eclipse.jdt.internal.ui.JavaPlugin;
 import org.eclipse.jface.dialogs.IDialogSettings;
 import org.eclipse.jface.layout.GridDataFactory;
+import org.eclipse.jface.util.BidiUtils;
 import org.eclipse.jface.viewers.IStructuredSelection;
 import org.eclipse.jface.wizard.IWizard;
 import org.eclipse.swt.SWT;
@@ -32,20 +34,19 @@ import org.eclipse.swt.custom.SashForm;
 import org.eclipse.swt.custom.ScrolledComposite;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
-import org.eclipse.swt.events.SelectionListener;
 import org.eclipse.swt.graphics.Font;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Composite;
-import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.FileDialog;
 import org.eclipse.swt.widgets.Group;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Text;
 import org.eclipse.swt.widgets.Widget;
+import org.eclipse.ui.internal.wizards.datatransfer.DataTransferMessages;
 import org.talend.commons.exception.PersistenceException;
 import org.talend.core.GlobalServiceRegister;
 import org.talend.core.PluginChecker;
@@ -57,7 +58,6 @@ import org.talend.core.repository.model.ProxyRepositoryFactory;
 import org.talend.core.runtime.process.TalendProcessArgumentConstant;
 import org.talend.core.service.IESBMicroService;
 import org.talend.core.ui.branding.IBrandingService;
-import org.talend.designer.core.ICamelDesignerCoreService;
 import org.talend.designer.runprocess.IProcessor;
 import org.talend.repository.i18n.Messages;
 import org.talend.repository.ui.utils.Log4jPrefsSettingManager;
@@ -77,9 +77,12 @@ public class JavaJobScriptsExportWSWizardPage extends JavaJobScriptsExportWizard
      * type of job exports.
      */
     public static enum JobExportType {
+
         POJO(Messages.getString("JavaJobScriptsExportWSWizardPage.POJO"), false), //$NON-NLS-1$
         OSGI(Messages.getString("JavaJobScriptsExportWSWizardPage.OSGI"), false), //$NON-NLS-1$
-        MSESB(Messages.getString("JavaJobScriptsExportWSWizardPage.MSESB"), false);//$NON-NLS-1$
+        MSESB(Messages.getString("JavaJobScriptsExportWSWizardPage.MSESB"), false), //$NON-NLS-1$
+        IMAGE(Messages.getString("JavaJobScriptsExportWSWizardPage.IMAGE"), false); //$NON-NLS-1$
+
         public final String label;
 
         public final boolean deprecate;
@@ -178,6 +181,18 @@ public class JavaJobScriptsExportWSWizardPage extends JavaJobScriptsExportWizard
 
     JavaJobScriptsExportWSWizardPagePresenter presenter = new JavaJobScriptsExportWSWizardPagePresenter(this);
 
+    private Label destinationLabel;
+
+    private Combo destinationNameField;
+
+    private Button destinationBrowseButton;
+
+    private Button customButton;
+
+    private Text imageText;
+
+    private Text tagText;
+
     public JavaJobScriptsExportWSWizardPage(IStructuredSelection selection, String exportType) {
         super(selection);
         // there assign the manager again
@@ -208,6 +223,41 @@ public class JavaJobScriptsExportWSWizardPage extends JavaJobScriptsExportWizard
                 dialogSettings.put(STORE_EXPORTTYPE_ID, defaultExportType);
             }
         }// else ignors it
+    }
+
+    @Override
+    protected void createDestinationGroup(Composite parent) {
+        Font font = parent.getFont();
+        // destination specification group
+        Composite destinationSelectionGroup = new Composite(parent, SWT.NONE);
+        GridLayout layout = new GridLayout();
+        layout.numColumns = 3;
+        destinationSelectionGroup.setLayout(layout);
+        destinationSelectionGroup.setLayoutData(new GridData(GridData.HORIZONTAL_ALIGN_FILL | GridData.VERTICAL_ALIGN_FILL));
+        destinationSelectionGroup.setFont(font);
+
+        destinationLabel = new Label(destinationSelectionGroup, SWT.NONE);
+        destinationLabel.setText(getDestinationLabel());
+        destinationLabel.setFont(font);
+
+        // destination name entry field
+        destinationNameField = new Combo(destinationSelectionGroup, SWT.SINGLE | SWT.BORDER);
+        destinationNameField.addListener(SWT.Modify, this);
+        destinationNameField.addListener(SWT.Selection, this);
+        GridData data = new GridData(GridData.HORIZONTAL_ALIGN_FILL | GridData.GRAB_HORIZONTAL);
+        data.widthHint = SIZING_TEXT_FIELD_WIDTH;
+        destinationNameField.setLayoutData(data);
+        destinationNameField.setFont(font);
+        BidiUtils.applyBidiProcessing(destinationNameField, "file"); //$NON-NLS-1$
+
+        // destination browse button
+        destinationBrowseButton = new Button(destinationSelectionGroup, SWT.PUSH);
+        destinationBrowseButton.setText(DataTransferMessages.DataTransfer_browse);
+        destinationBrowseButton.addListener(SWT.Selection, this);
+        destinationBrowseButton.setFont(font);
+        setButtonLayoutData(destinationBrowseButton);
+
+        new Label(parent, SWT.NONE); // vertical spacer
     }
 
     /**
@@ -373,19 +423,23 @@ public class JavaJobScriptsExportWSWizardPage extends JavaJobScriptsExportWizard
         for (JobExportType exportType : extractExportJobTypes()) {
             if (!Boolean.getBoolean("talend.export.job.2." + exportType.toString() + ".hide")) { //$NON-NLS-1$//$NON-NLS-2$
                 // TESB-20767 Microservice should not be display with TDI license
-                if (exportType.equals(JobExportType.MSESB)
-                        && !GlobalServiceRegister.getDefault().isServiceRegistered(ICamelDesignerCoreService.class)) {
-                    // reset export type to POJO
-                    if (getCurrentExportType1().equals(JobExportType.MSESB)) {
-                        getDialogSettings().put(STORE_EXPORTTYPE_ID, JobExportType.POJO.label);
-                    }
-                    continue;
-                }
-
                 if (exportType.equals(JobExportType.MSESB)) {
                     if (GlobalServiceRegister.getDefault().isServiceRegistered(IESBMicroService.class)) {
-                exportTypeCombo.add(exportType.label);
-            }
+                        exportTypeCombo.add(exportType.label);
+                    } else {
+                        // reset export type to POJO
+                        if (getCurrentExportType1().equals(JobExportType.MSESB)) {
+                            getDialogSettings().put(STORE_EXPORTTYPE_ID, JobExportType.POJO.label);
+                        }
+                    }
+                } else if (exportType.equals(JobExportType.IMAGE)) {
+                    if (PluginChecker.isDockerPluginLoaded()) {
+                        exportTypeCombo.add(exportType.label);
+                    } else {
+                        if (getCurrentExportType1().equals(JobExportType.IMAGE)) {
+                            getDialogSettings().put(STORE_EXPORTTYPE_ID, JobExportType.POJO.label);
+                        }
+                    }
                 } else {
                     exportTypeCombo.add(exportType.label);
                 }
@@ -418,7 +472,7 @@ public class JavaJobScriptsExportWSWizardPage extends JavaJobScriptsExportWizard
         chkButton = new Button(left, SWT.CHECK);
         chkButton.setText(Messages.getString("JavaJobScriptsExportWSWizardPage.extractZipFile")); //$NON-NLS-1$
         JobExportType comboType = JobExportType.getTypeFromString(exportTypeCombo.getText());
-        if (comboType.equals(JobExportType.OSGI) || comboType.equals(JobExportType.MSESB)) {
+        if (comboType != JobExportType.POJO) {
             chkButton.setVisible(false);
             zipOption = null;
         } else {
@@ -444,16 +498,23 @@ public class JavaJobScriptsExportWSWizardPage extends JavaJobScriptsExportWizard
                 pageComposite.setSize(pageComposite.computeSize(SWT.DEFAULT, SWT.DEFAULT));
                 pageComposite.layout();
                 JobExportType comboType = JobExportType.getTypeFromString(exportTypeCombo.getText());
-                if (comboType.equals(JobExportType.OSGI) || comboType.equals(JobExportType.MSESB)) {
+                if (comboType != JobExportType.POJO) {
                     chkButton.setVisible(false);
                     zipOption = null;
                 } else {
                     chkButton.setVisible(true);
                     zipOption = String.valueOf(chkButton.getSelection());
                 }
+                updateDestinationGroup(comboType == JobExportType.IMAGE);
                 checkExport();
             }
         });
+    }
+
+    protected void updateDestinationGroup(boolean isImage) {
+        destinationLabel.setEnabled(!isImage);
+        destinationBrowseButton.setEnabled(!isImage);
+        destinationNameField.setEnabled(!isImage);
     }
 
     /*
@@ -585,9 +646,41 @@ public class JavaJobScriptsExportWSWizardPage extends JavaJobScriptsExportWizard
     }
 
     @Override
+    protected void addDestinationItem(String value) {
+        destinationNameField.add(value);
+    }
+
+    @Override
+    protected String getDestinationValue() {
+        return destinationNameField.getText().trim();
+    }
+
+    @Override
+    protected void setDestinationValue(String value) {
+        destinationNameField.setText(value);
+    }
+
+    @Override
+    protected void giveFocusToDestination() {
+        destinationNameField.setFocus();
+    }
+
+    @Override
+    protected boolean ensureTargetIsValid() {
+        if (JobExportType.getTypeFromString(exportTypeCombo.getText()) == JobExportType.IMAGE) {
+            return true;
+        }
+        return super.ensureTargetIsValid();
+    }
+
+    @Override
     public void handleEvent(Event e) {
-        super.handleEvent(e);
         Widget source = e.widget;
+        if (source == destinationBrowseButton) {
+            handleDestinationBrowseButtonPressed();
+        }
+        updatePageCompletion();
+
         if (source instanceof Combo) {
             String destination = ((Combo) source).getText();
             if (getDialogSettings() != null) {
@@ -805,6 +898,53 @@ public class JavaJobScriptsExportWSWizardPage extends JavaJobScriptsExportWizard
         }
     }
 
+    private void restoreWidgetValuesForImage() {
+        IDialogSettings settings = getDialogSettings();
+        if (settings != null) {
+            String[] directoryNames = settings.getArray(STORE_DESTINATION_NAMES_ID);
+            String fileName = getDefaultFileNameWithType();
+            if (!fileName.endsWith(FileConstants.ZIP_FILE_SUFFIX)) {
+                fileName = fileName + FileConstants.ZIP_FILE_SUFFIX;
+            }
+            if (directoryNames != null && directoryNames.length > 0) {
+                for (int i = 0; i < directoryNames.length; i++) {
+                    if (directoryNames[i].toLowerCase().endsWith(FileConstants.ZIP_FILE_SUFFIX)) {
+                        directoryNames[i] = (directoryNames[i].charAt(0) + "").toUpperCase() + directoryNames[i].substring(1);//$NON-NLS-1$
+                        addDestinationItem(directoryNames[i]);
+                        break;
+                    }
+                }
+                setDestinationValue(directoryNames[0].substring(0, (directoryNames[0].lastIndexOf("\\") + 1)) + fileName);//$NON-NLS-1$
+            } else {
+                setDefaultDestination();
+            }
+            updateDestinationGroup(true);
+            contextButton.setSelection(settings.getBoolean(STORE_CONTEXT_ID));
+            applyToChildrenButton.setSelection(settings.getBoolean(APPLY_TO_CHILDREN_ID));
+        }
+        if (getProcessItem() != null && contextCombo != null) {
+            ProcessItem item = getProcessItem();
+            try {
+                String id = item.getProperty().getId();
+                IRepositoryViewObject lastVersion = ProxyRepositoryFactory.getInstance().getLastVersion(id);
+                item = (ProcessItem) lastVersion.getProperty().getItem();
+            } catch (PersistenceException e) {
+                throw new RuntimeException(e);
+            }
+            List<String> contextNames = ExportJobUtil.getJobContexts(item);
+            contextCombo.setItems(contextNames.toArray(new String[contextNames.size()]));
+            if (contextNames.size() > 0) {
+                contextCombo.select(0);
+            }
+        }
+        if (log4jLevelCombo != null) {
+            log4jLevelCombo.setItems(Log4jPrefsSettingManager.getLevel());
+            if (Log4jPrefsSettingManager.getLevel().length > 0) {
+                log4jLevelCombo.select(2);
+            }
+        }
+    }
+
     @Override
     protected void internalSaveWidgetValues() {
         // update directory names history
@@ -829,6 +969,9 @@ public class JavaJobScriptsExportWSWizardPage extends JavaJobScriptsExportWizard
                 return;
             }
             if (getCurrentExportType1().equals(JobExportType.MSESB)) {
+                return;
+            }
+            if (getCurrentExportType1().equals(JobExportType.IMAGE)) {
                 return;
             }
             if (contextButton != null) {
@@ -894,6 +1037,10 @@ public class JavaJobScriptsExportWSWizardPage extends JavaJobScriptsExportWizard
             return exportChoiceMap;
         }
 
+        if (comboType.equals(JobExportType.IMAGE)) {
+            return getExportChoiceMapForImage();
+        }
+
         // fix bug 9150, export items and code source, added by nma
         exportChoiceMap.put(ExportChoice.needJobItem, jobScriptButton.getSelection());
         exportChoiceMap.put(ExportChoice.needSourceCode, jobScriptButton.getSelection());
@@ -907,6 +1054,53 @@ public class JavaJobScriptsExportWSWizardPage extends JavaJobScriptsExportWizard
         exportChoiceMap.put(ExportChoice.needContext, contextButton.getSelection());
         exportChoiceMap.put(ExportChoice.applyToChildren, applyToChildrenButton.getSelection());
         exportChoiceMap.put(ExportChoice.needMetaInfo, false);
+        return exportChoiceMap;
+    }
+
+    private Map<ExportChoice, Object> getExportChoiceMapForImage() {
+        Map<ExportChoice, Object> exportChoiceMap = new EnumMap<ExportChoice, Object>(ExportChoice.class);
+        exportChoiceMap.put(ExportChoice.buildImage, Boolean.TRUE);
+        exportChoiceMap.put(ExportChoice.needLauncher, Boolean.FALSE);
+        exportChoiceMap.put(ExportChoice.needSystemRoutine, Boolean.TRUE);
+        exportChoiceMap.put(ExportChoice.needUserRoutine, Boolean.TRUE);
+        exportChoiceMap.put(ExportChoice.needTalendLibraries, Boolean.TRUE);
+        exportChoiceMap.put(ExportChoice.needJobItem, Boolean.FALSE);
+        exportChoiceMap.put(ExportChoice.needSourceCode, Boolean.FALSE);
+        exportChoiceMap.put(ExportChoice.needDependencies, Boolean.TRUE);
+        exportChoiceMap.put(ExportChoice.needJobScript, Boolean.FALSE);
+        exportChoiceMap.put(ExportChoice.needAssembly, Boolean.FALSE);
+        exportChoiceMap.put(ExportChoice.needContext, isNeedConext());
+        exportChoiceMap.put(ExportChoice.contextName, getContextName());
+
+        if (customButton.getSelection()) {
+            String imageName = imageText.getText();
+            if (!StringUtils.isBlank(imageName)) {
+                exportChoiceMap.put(ExportChoice.imageName, imageName);
+            }
+            String imageTag = tagText.getText();
+            if (!StringUtils.isBlank(imageTag)) {
+                exportChoiceMap.put(ExportChoice.imageTag, imageTag);
+            }
+        }
+
+        if (applyToChildrenButton != null) {
+            exportChoiceMap.put(ExportChoice.applyToChildren, applyToChildrenButton.getSelection());
+        }
+        if (setParametersValueButton2 != null) {
+            exportChoiceMap.put(ExportChoice.needParameterValues, setParametersValueButton2.getSelection());
+            if (setParametersValueButton2.getSelection()) {
+                exportChoiceMap.put(ExportChoice.parameterValuesList, manager.getContextEditableResultValuesList());
+            }
+        }
+
+        exportChoiceMap.put(ExportChoice.binaries, Boolean.TRUE);
+        exportChoiceMap.put(ExportChoice.executeTests, Boolean.FALSE);
+        exportChoiceMap.put(ExportChoice.includeTestSource, Boolean.FALSE);
+        exportChoiceMap.put(ExportChoice.includeLibs, Boolean.TRUE);
+
+        exportChoiceMap.put(ExportChoice.needLog4jLevel, isNeedLog4jLevel());
+        exportChoiceMap.put(ExportChoice.log4jLevel, getLog4jLevel());
+
         return exportChoiceMap;
     }
 
@@ -951,6 +1145,11 @@ public class JavaJobScriptsExportWSWizardPage extends JavaJobScriptsExportWizard
         case MSESB:
             createOptionsForMSESB(left, font);
             restoreWidgetValuesForOSGI();
+            break;
+        case IMAGE:
+            createOptionForDockerImage(left, font);
+            createDockerOptions();
+            restoreWidgetValuesForImage();
             break;
         default:
             createOptionsForWS(left, font);
@@ -1102,6 +1301,73 @@ public class JavaJobScriptsExportWSWizardPage extends JavaJobScriptsExportWizard
 
     }
 
+    private void createOptionForDockerImage(Composite optionsGroup, Font font) {
+        Composite optionsComposite = new Composite(optionsGroup, SWT.NONE);
+        GridDataFactory.fillDefaults().grab(true, false).span(3, 1).applyTo(optionsComposite);
+
+        GridLayout gdlOptionsComposite = new GridLayout(3, false);
+        gdlOptionsComposite.marginHeight = 0;
+        gdlOptionsComposite.marginWidth = 0;
+        optionsComposite.setLayout(gdlOptionsComposite);
+
+        createContextOptions(font, optionsComposite);
+        new Label(optionsComposite, SWT.NONE);
+        new Label(optionsComposite, SWT.NONE);
+        createLog4jOption(font, optionsComposite);
+
+    }
+
+    private void createDockerOptions() {
+        Group optionsGroup = new Group(optionsGroupComposite, SWT.NONE);
+        GridDataFactory.fillDefaults().grab(true, false).applyTo(optionsGroup);
+
+        optionsGroup.setText(Messages.getString("JavaJobScriptsExportWSWizardPage.DOCKER.optionGroup")); //$NON-NLS-1$
+        optionsGroup.setLayout(new GridLayout());
+
+        Composite dockeOptionsComposite = new Composite(optionsGroup, SWT.NONE);
+        GridDataFactory.fillDefaults().grab(true, false).span(3, 1).applyTo(dockeOptionsComposite);
+        GridLayout dockerOptionsLayout = new GridLayout(2, false);
+        dockerOptionsLayout.marginHeight = 0;
+        dockerOptionsLayout.marginWidth = 0;
+        dockeOptionsComposite.setLayout(dockerOptionsLayout);
+        
+        customButton = new Button(dockeOptionsComposite, SWT.CHECK);
+        customButton.setText(Messages.getString("JavaJobScriptsExportWSWizardPage.DOCKER.custom")); //$NON-NLS-1$
+        GridDataFactory.fillDefaults().grab(false, false).span(2, 1).applyTo(customButton);
+
+        Label imageLabel = new Label(dockeOptionsComposite, SWT.NONE);
+        imageLabel.setText(Messages.getString("JavaJobScriptsExportWSWizardPage.DOCKER.imageLabel")); //$NON-NLS-1$
+        imageText = new Text(dockeOptionsComposite, SWT.BORDER);
+        imageText.setText("${talend.project.name.lowercase}/${talend.job.folder}%a"); //$NON-NLS-1$
+        imageText.setEnabled(false);
+        GridDataFactory.fillDefaults().grab(true, false).applyTo(imageText);
+
+        Label tagLabel = new Label(dockeOptionsComposite, SWT.NONE);
+        tagLabel.setText(Messages.getString("JavaJobScriptsExportWSWizardPage.DOCKER.tagLabel")); //$NON-NLS-1$
+        tagText = new Text(dockeOptionsComposite, SWT.BORDER);
+        tagText.setText("${talend.job.version}"); //$NON-NLS-1$
+        tagText.setEnabled(false);
+        GridDataFactory.fillDefaults().grab(true, false).applyTo(tagText);
+
+        customButton.addSelectionListener(new SelectionAdapter() {
+
+            @Override
+            public void widgetSelected(SelectionEvent e) {
+                boolean select = customButton.getSelection();
+                imageText.setEnabled(select);
+                tagText.setEnabled(select);
+            }
+        });
+
+        // Label additionalLabel = new Label(dockeOptionsComposite, SWT.NONE);
+        // additionalLabel.setText("Additional properties");
+        // Text additionalText = new Text(dockeOptionsComposite, SWT.BORDER | SWT.MULTI | SWT.WRAP | SWT.V_SCROLL);
+        // GridData data = new GridData(GridData.FILL_HORIZONTAL);
+        // data.heightHint = 60;
+        // additionalText.setLayoutData(data);
+
+    }
+
     protected void createOptionsForWS(Composite optionsGroup, Font font) {
 
         webXMLButton = new Button(optionsGroup, SWT.CHECK | SWT.LEFT);
@@ -1246,5 +1512,6 @@ public class JavaJobScriptsExportWSWizardPage extends JavaJobScriptsExportWizard
 
         return super.finish();
     }
+
 
 }

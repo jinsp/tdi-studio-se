@@ -32,6 +32,8 @@ import org.eclipse.jface.wizard.IWizard;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.SashForm;
 import org.eclipse.swt.custom.ScrolledComposite;
+import org.eclipse.swt.events.ModifyEvent;
+import org.eclipse.swt.events.ModifyListener;
 import org.eclipse.swt.events.SelectionAdapter;
 import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.graphics.Font;
@@ -186,8 +188,6 @@ public class JavaJobScriptsExportWSWizardPage extends JavaJobScriptsExportWizard
     private Combo destinationNameField;
 
     private Button destinationBrowseButton;
-
-    private Button customButton;
 
     private Text imageText;
 
@@ -1072,15 +1072,13 @@ public class JavaJobScriptsExportWSWizardPage extends JavaJobScriptsExportWizard
         exportChoiceMap.put(ExportChoice.needContext, isNeedConext());
         exportChoiceMap.put(ExportChoice.contextName, getContextName());
 
-        if (customButton.getSelection()) {
-            String imageName = imageText.getText();
-            if (!StringUtils.isBlank(imageName)) {
-                exportChoiceMap.put(ExportChoice.imageName, imageName);
-            }
-            String imageTag = tagText.getText();
-            if (!StringUtils.isBlank(imageTag)) {
-                exportChoiceMap.put(ExportChoice.imageTag, imageTag);
-            }
+        String imageName = imageText.getText();
+        if (!StringUtils.isBlank(imageName)) {
+            exportChoiceMap.put(ExportChoice.imageName, imageName);
+        }
+        String imageTag = tagText.getText();
+        if (!StringUtils.isBlank(imageTag)) {
+            exportChoiceMap.put(ExportChoice.imageTag, imageTag);
         }
 
         if (applyToChildrenButton != null) {
@@ -1330,34 +1328,33 @@ public class JavaJobScriptsExportWSWizardPage extends JavaJobScriptsExportWizard
         dockerOptionsLayout.marginHeight = 0;
         dockerOptionsLayout.marginWidth = 0;
         dockeOptionsComposite.setLayout(dockerOptionsLayout);
-        
-        customButton = new Button(dockeOptionsComposite, SWT.CHECK);
-        customButton.setText(Messages.getString("JavaJobScriptsExportWSWizardPage.DOCKER.custom")); //$NON-NLS-1$
-        GridDataFactory.fillDefaults().grab(false, false).span(2, 1).applyTo(customButton);
 
         Label imageLabel = new Label(dockeOptionsComposite, SWT.NONE);
         imageLabel.setText(Messages.getString("JavaJobScriptsExportWSWizardPage.DOCKER.imageLabel")); //$NON-NLS-1$
         imageText = new Text(dockeOptionsComposite, SWT.BORDER);
         imageText.setText("${talend.project.name.lowercase}/${talend.job.folder}%a"); //$NON-NLS-1$
-        imageText.setEnabled(false);
         GridDataFactory.fillDefaults().grab(true, false).applyTo(imageText);
 
         Label tagLabel = new Label(dockeOptionsComposite, SWT.NONE);
         tagLabel.setText(Messages.getString("JavaJobScriptsExportWSWizardPage.DOCKER.tagLabel")); //$NON-NLS-1$
         tagText = new Text(dockeOptionsComposite, SWT.BORDER);
         tagText.setText("${talend.job.version}"); //$NON-NLS-1$
-        tagText.setEnabled(false);
         GridDataFactory.fillDefaults().grab(true, false).applyTo(tagText);
 
-        customButton.addSelectionListener(new SelectionAdapter() {
+        ModifyListener optionListener = new ModifyListener() {
 
             @Override
-            public void widgetSelected(SelectionEvent e) {
-                boolean select = customButton.getSelection();
-                imageText.setEnabled(select);
-                tagText.setEnabled(select);
+            public void modifyText(ModifyEvent e) {
+                if (!isOptionValid(imageText, imageLabel.getText())) {
+                    return;
+                }
+                if (!isOptionValid(tagText, tagLabel.getText())) {
+                    return;
+                }
             }
-        });
+        };
+        imageText.addModifyListener(optionListener);
+        tagText.addModifyListener(optionListener);
 
         // Label additionalLabel = new Label(dockeOptionsComposite, SWT.NONE);
         // additionalLabel.setText("Additional properties");
@@ -1366,6 +1363,20 @@ public class JavaJobScriptsExportWSWizardPage extends JavaJobScriptsExportWizard
         // data.heightHint = 60;
         // additionalText.setLayoutData(data);
 
+    }
+
+    private boolean isOptionValid(Text text, String label) {
+        boolean isValid = false;
+        if (StringUtils.isBlank(text.getText())) {
+            setErrorMessage(Messages.getString("JavaJobScriptsExportWSWizardPage.DOCKER.errorMsg", label)); //$NON-NLS-1$
+            setPageComplete(false);
+            isValid = false;
+        } else {
+            setErrorMessage(null);
+            setPageComplete(true);
+            isValid = true;
+        }
+        return isValid;
     }
 
     protected void createOptionsForWS(Composite optionsGroup, Font font) {

@@ -162,7 +162,7 @@
                             <br />
                             <table class="cols" width="90%"
                                 cellpadding="0" border="1" cellspacing="0"
-                                style="border-collapse: collapse;table-layout:fixed; word-break:break-strict;word-wrap:break-word;" bordercolor="#111111"
+                                style="border-collapse: collapse;table-layout:fixed; word-break:break-all;word-wrap:break-word;white-space:pre-wrap" bordercolor="#111111"
                                 frame="box" summary="">
                                 <tr class="profont">
                                     <th class="TABLECOLUMNSTYLE" 
@@ -185,7 +185,7 @@
                                 <xsl:for-each
                                     select="metadataTableEntries/entry">
                                     <tr class="FONTSTYLE">
-                                        <td align="left" >
+                                        <td align="left">
                                            <xsl:value-of
                                                 select="@name" />
                                         </td>

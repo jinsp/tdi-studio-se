@@ -279,7 +279,8 @@ public class MapperComponentDocumentation implements IComponentDocumentation {
         // }
 
         entryElement.addAttribute("type", type); //$NON-NLS-1$
-        entryElement.addAttribute("expression", HTMLDocUtils.checkString(entry.getExpression())); //$NON-NLS-1$
+        String expression = HTMLDocUtils.checkString(entry.getExpression());
+        entryElement.addAttribute("expression", handleLongPathForPDF(expression)); //$NON-NLS-1$
         boolean isNullable = false;
         if (entry instanceof TreeNode) {
             isNullable = ((TreeNode) entry).isNullable();
@@ -291,25 +292,25 @@ public class MapperComponentDocumentation implements IComponentDocumentation {
         if (entry instanceof TreeNode) {
             TreeNode treeNode = (TreeNode) entry;
             String xpath = HTMLDocUtils.checkString(treeNode.getXpath());
-            int breaks = 30;
-            int rows = xpath.length() / breaks;
-            String xpathWithbreaks = "";
-            for (int i = 0; i < rows; i++) {
-                xpathWithbreaks = xpathWithbreaks + xpath.substring(i * breaks, (i + 1) * breaks) + "\n";
-            }
-            if (rows > 0 && rows * 60 < xpath.length()) {
-                xpathWithbreaks = xpathWithbreaks + xpath.substring(rows * breaks);
-            }
-            if (xpathWithbreaks.length() > xpath.length()) {
-                xpath = xpathWithbreaks;
-            }
-            entryElement.addAttribute("name", xpath); //$NON-NLS-1$
+            entryElement.addAttribute("name", handleLongPathForPDF(xpath)); //$NON-NLS-1$
             if (!treeNode.getChildren().isEmpty()) {
                 for (TreeNode node : treeNode.getChildren()) {
                     generateTablesEntriesInfo(metadataTableEntriesElement, node);
                 }
             }
         }
+    }
+
+    private String handleLongPathForPDF(String text) {
+        String[] split = text.split("/");
+        String newText = "";
+        if (split.length > 1) {
+            for (int i = 0; i < split.length - 1; i++) {
+                newText = newText + split[i] + "/" + "\n";
+            }
+            newText = newText + split[split.length - 1];
+        }
+        return newText;
     }
 
     /**

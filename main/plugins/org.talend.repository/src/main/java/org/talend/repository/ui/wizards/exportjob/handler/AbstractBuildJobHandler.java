@@ -244,6 +244,10 @@ public abstract class AbstractBuildJobHandler implements IBuildJobHandler, IBuil
         StringBuffer otherArgsBuffer = new StringBuffer();
 
         if (isOptionChoosed(ExportChoice.buildImage)) {
+            String dockerHost = (String) exportChoice.get(ExportChoice.dockerHost);
+            if (dockerHost != null) {
+                otherArgsBuffer.append("-Ddocker.host=" + dockerHost + " "); //$NON-NLS-1$ //$NON-NLS-2$
+            }
             String imageName = (String) exportChoice.get(ExportChoice.imageName);
             if (imageName != null) {
                 otherArgsBuffer.append("-Dtalend.docker.name=" + imageName + " "); //$NON-NLS-1$ //$NON-NLS-2$
@@ -259,6 +263,15 @@ public abstract class AbstractBuildJobHandler implements IBuildJobHandler, IBuil
             if (registry != null) {
                 otherArgsBuffer.append("-Ddocker.push.registry=" + registry + " "); //$NON-NLS-1$ //$NON-NLS-2$
             }
+            String username = (String) exportChoice.get(ExportChoice.registryUsername);
+            if (username != null) {
+                otherArgsBuffer.append("-Ddocker.push.username=" + username + " "); //$NON-NLS-1$ //$NON-NLS-2$
+            }
+            String password = (String) exportChoice.get(ExportChoice.registryPassword);
+            if (password != null) {
+                otherArgsBuffer.append("-Ddocker.push.password=" + password + " "); //$NON-NLS-1$ //$NON-NLS-2$
+            }
+
         }
 
         if (!isOptionChoosed(ExportChoice.executeTests)) {

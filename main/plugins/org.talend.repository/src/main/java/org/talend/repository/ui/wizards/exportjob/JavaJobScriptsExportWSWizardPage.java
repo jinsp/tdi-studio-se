@@ -189,6 +189,10 @@ public class JavaJobScriptsExportWSWizardPage extends JavaJobScriptsExportWizard
 
     private Button destinationBrowseButton;
 
+    private Button remoteRadio;
+
+    private Text hostText;
+
     private Text imageText;
 
     private Text tagText;
@@ -1072,6 +1076,12 @@ public class JavaJobScriptsExportWSWizardPage extends JavaJobScriptsExportWizard
         exportChoiceMap.put(ExportChoice.needContext, isNeedConext());
         exportChoiceMap.put(ExportChoice.contextName, getContextName());
 
+        if (remoteRadio.getSelection()) {
+            String host = hostText.getText();
+            if (!StringUtils.isBlank(host)) {
+                exportChoiceMap.put(ExportChoice.dockerHost, host);
+            }
+        }
         String imageName = imageText.getText();
         if (!StringUtils.isBlank(imageName)) {
             exportChoiceMap.put(ExportChoice.imageName, imageName);
@@ -1324,27 +1334,45 @@ public class JavaJobScriptsExportWSWizardPage extends JavaJobScriptsExportWizard
 
         Composite dockeOptionsComposite = new Composite(optionsGroup, SWT.NONE);
         GridDataFactory.fillDefaults().grab(true, false).span(3, 1).applyTo(dockeOptionsComposite);
-        GridLayout dockerOptionsLayout = new GridLayout(2, false);
+        GridLayout dockerOptionsLayout = new GridLayout(3, false);
         dockerOptionsLayout.marginHeight = 0;
         dockerOptionsLayout.marginWidth = 0;
         dockeOptionsComposite.setLayout(dockerOptionsLayout);
+
+        Label hostLabel = new Label(dockeOptionsComposite, SWT.NONE);
+        hostLabel.setText(Messages.getString("JavaJobScriptsExportWSWizardPage.DOCKER.dockerHost")); //$NON-NLS-1$
+        Composite hostComposite = new Composite(dockeOptionsComposite, SWT.NONE);
+        hostComposite.setLayout(new GridLayout(2, false));
+
+        Button localRadio = new Button(hostComposite, SWT.RADIO);
+        localRadio.setText(Messages.getString("JavaJobScriptsExportWSWizardPage.DOCKER.localHost")); //$NON-NLS-1$
+        localRadio.setSelection(true);
+        remoteRadio = new Button(hostComposite, SWT.RADIO);
+        remoteRadio.setText(Messages.getString("JavaJobScriptsExportWSWizardPage.DOCKER.remoteHost")); //$NON-NLS-1$
+        hostText = new Text(dockeOptionsComposite, SWT.BORDER);
+        hostText.setEnabled(false);
+        GridData hostData = new GridData(GridData.FILL_HORIZONTAL);
+        hostText.setLayoutData(hostData);
 
         Label imageLabel = new Label(dockeOptionsComposite, SWT.NONE);
         imageLabel.setText(Messages.getString("JavaJobScriptsExportWSWizardPage.DOCKER.imageLabel")); //$NON-NLS-1$
         imageText = new Text(dockeOptionsComposite, SWT.BORDER);
         imageText.setText("${talend.project.name.lowercase}/${talend.job.folder}%a"); //$NON-NLS-1$
-        GridDataFactory.fillDefaults().grab(true, false).applyTo(imageText);
+        GridDataFactory.fillDefaults().span(2, 1).grab(true, false).applyTo(imageText);
 
         Label tagLabel = new Label(dockeOptionsComposite, SWT.NONE);
         tagLabel.setText(Messages.getString("JavaJobScriptsExportWSWizardPage.DOCKER.tagLabel")); //$NON-NLS-1$
         tagText = new Text(dockeOptionsComposite, SWT.BORDER);
         tagText.setText("${talend.job.version}"); //$NON-NLS-1$
-        GridDataFactory.fillDefaults().grab(true, false).applyTo(tagText);
+        GridDataFactory.fillDefaults().span(2, 1).grab(true, false).applyTo(tagText);
 
         ModifyListener optionListener = new ModifyListener() {
 
             @Override
             public void modifyText(ModifyEvent e) {
+                if (remoteRadio.getSelection() && !isOptionValid(hostText, hostLabel.getText())) {
+                    return;
+                }
                 if (!isOptionValid(imageText, imageLabel.getText())) {
                     return;
                 }
@@ -1353,8 +1381,28 @@ public class JavaJobScriptsExportWSWizardPage extends JavaJobScriptsExportWizard
                 }
             }
         };
+
+        hostText.addModifyListener(optionListener);
         imageText.addModifyListener(optionListener);
         tagText.addModifyListener(optionListener);
+
+        remoteRadio.addSelectionListener(new SelectionAdapter() {
+
+            @Override
+            public void widgetSelected(SelectionEvent e) {
+                hostText.setEnabled(remoteRadio.getSelection());
+                if (remoteRadio.getSelection() && !isOptionValid(hostText, hostLabel.getText())) {
+                    return;
+                }
+                if (!isOptionValid(imageText, imageLabel.getText())) {
+                    return;
+                }
+                if (!isOptionValid(tagText, tagLabel.getText())) {
+                    return;
+                }
+            }
+
+        });
 
         // Label additionalLabel = new Label(dockeOptionsComposite, SWT.NONE);
         // additionalLabel.setText("Additional properties");

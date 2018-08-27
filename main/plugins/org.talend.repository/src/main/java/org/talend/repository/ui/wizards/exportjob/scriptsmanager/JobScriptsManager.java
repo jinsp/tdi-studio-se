@@ -223,9 +223,12 @@ public abstract class JobScriptsManager {
         needAssembly,
         buildImage,
         pushImage,
+        dockerHost,
         imageName,
         imageTag,
-        pushRegistry
+        pushRegistry,
+        registryUsername,
+        registryPassword
     }
 
     /**

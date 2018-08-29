@@ -187,7 +187,7 @@ public abstract class JobScriptsExportWizardPage extends WizardFileSystemResourc
 
     protected IStructuredSelection selection;
 
-    private ExportTreeViewer treeViewer;
+    protected ExportTreeViewer treeViewer;
 
     Collection<RepositoryNode> repositoryNodes = new ArrayList<RepositoryNode>();
 
@@ -360,6 +360,7 @@ public abstract class JobScriptsExportWizardPage extends WizardFileSystemResourc
         @Override
         public void checkStateChanged(CheckStateChangedEvent event) {
             checkExport();
+            updateOptionBySelection();
         }
 
     };
@@ -378,6 +379,10 @@ public abstract class JobScriptsExportWizardPage extends WizardFileSystemResourc
             this.setErrorMessage(Messages.getString("JobScriptsExportWizardPage.chooseResource"));
         }
         return canExport;
+    }
+
+    protected void updateOptionBySelection() {
+
     }
 
     protected SashForm createExportTree(Composite parent) {

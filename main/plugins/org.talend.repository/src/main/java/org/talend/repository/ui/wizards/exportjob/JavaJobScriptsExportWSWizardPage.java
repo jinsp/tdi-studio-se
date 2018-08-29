@@ -14,11 +14,13 @@ package org.talend.repository.ui.wizards.exportjob;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
+import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.IStatus;
@@ -60,8 +62,12 @@ import org.talend.core.repository.model.ProxyRepositoryFactory;
 import org.talend.core.runtime.process.TalendProcessArgumentConstant;
 import org.talend.core.service.IESBMicroService;
 import org.talend.core.ui.branding.IBrandingService;
+import org.talend.designer.maven.model.TalendMavenConstants;
+import org.talend.designer.maven.tools.AggregatorPomsHelper;
+import org.talend.designer.maven.utils.PomUtil;
 import org.talend.designer.runprocess.IProcessor;
 import org.talend.repository.i18n.Messages;
+import org.talend.repository.model.RepositoryNode;
 import org.talend.repository.ui.utils.Log4jPrefsSettingManager;
 import org.talend.repository.ui.wizards.exportjob.scriptsmanager.BuildJobFactory;
 import org.talend.repository.ui.wizards.exportjob.scriptsmanager.JobScriptsManager;
@@ -1357,14 +1363,16 @@ public class JavaJobScriptsExportWSWizardPage extends JavaJobScriptsExportWizard
         Label imageLabel = new Label(dockeOptionsComposite, SWT.NONE);
         imageLabel.setText(Messages.getString("JavaJobScriptsExportWSWizardPage.DOCKER.imageLabel")); //$NON-NLS-1$
         imageText = new Text(dockeOptionsComposite, SWT.BORDER);
-        imageText.setText("${talend.project.name.lowercase}/${talend.job.folder}%a"); //$NON-NLS-1$
+        // imageText.setText("${talend.project.name.lowercase}/${talend.job.folder}%a"); //$NON-NLS-1$
         GridDataFactory.fillDefaults().span(2, 1).grab(true, false).applyTo(imageText);
 
         Label tagLabel = new Label(dockeOptionsComposite, SWT.NONE);
         tagLabel.setText(Messages.getString("JavaJobScriptsExportWSWizardPage.DOCKER.tagLabel")); //$NON-NLS-1$
         tagText = new Text(dockeOptionsComposite, SWT.BORDER);
-        tagText.setText("${talend.job.version}"); //$NON-NLS-1$
+        // tagText.setText("${talend.job.version}"); //$NON-NLS-1$
         GridDataFactory.fillDefaults().span(2, 1).grab(true, false).applyTo(tagText);
+
+        updateOptionBySelection();
 
         ModifyListener optionListener = new ModifyListener() {
 
@@ -1411,6 +1419,29 @@ public class JavaJobScriptsExportWSWizardPage extends JavaJobScriptsExportWizard
         // data.heightHint = 60;
         // additionalText.setLayoutData(data);
 
+    }
+
+    private String getDefaultImageName(ProcessItem procesItem) {
+        IFile pomFile = AggregatorPomsHelper.getItemPomFolder(procesItem.getProperty())
+                .getFile(TalendMavenConstants.POM_FILE_NAME);
+        String projectName = PomUtil.getPomProperty(pomFile, "talend.project.name.lowercase"); //$NON-NLS-1$
+        String jobFolderPath = PomUtil.getPomProperty(pomFile, "talend.job.folder"); //$NON-NLS-1$
+        String jobName = PomUtil.getPomProperty(pomFile, "talend.job.name").toLowerCase(); //$NON-NLS-1$
+        return projectName + "/" + jobFolderPath + jobName; //$NON-NLS-1$
+    }
+
+    private String getDefaultImageNamePattern() {
+        return "${talend.project.name.lowercase}/${talend.job.folder}%a"; //$NON-NLS-1$
+    }
+
+    private String getDefaultImageTag(ProcessItem procesItem) {
+        IFile pomFile = AggregatorPomsHelper.getItemPomFolder(procesItem.getProperty())
+                .getFile(TalendMavenConstants.POM_FILE_NAME);
+        return PomUtil.getPomProperty(pomFile, "talend.job.version"); //$NON-NLS-1$
+    }
+
+    private String getDefaultImageTagPattern() {
+        return "${talend.job.version}"; //$NON-NLS-1$
     }
 
     private boolean isOptionValid(Text text, String label) {
@@ -1563,6 +1594,23 @@ public class JavaJobScriptsExportWSWizardPage extends JavaJobScriptsExportWizard
 
         setPageComplete(noError);
         return noError;
+    }
+
+    @Override
+    protected void updateOptionBySelection() {
+        RepositoryNode[] selectedNodes = treeViewer.getCheckNodes();
+        if (selectedNodes.length > 1) {
+            imageText.setText(getDefaultImageNamePattern());
+            imageText.setEnabled(false);
+            tagText.setText(getDefaultImageTagPattern());
+            tagText.setEnabled(false);
+        } else if (selectedNodes.length == 1) {
+            ProcessItem selectedProcessItem = ExportJobUtil.getProcessItem(Arrays.asList(selectedNodes));
+            imageText.setText(getDefaultImageName(selectedProcessItem));
+            imageText.setEnabled(true);
+            tagText.setText(getDefaultImageTag(selectedProcessItem));
+            tagText.setEnabled(true);
+        }
     }
 
     @Override

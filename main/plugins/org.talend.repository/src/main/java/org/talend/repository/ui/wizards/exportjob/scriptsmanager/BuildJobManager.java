@@ -232,6 +232,8 @@ public class BuildJobManager {
                 processItem = ItemCacheManager.getProcessItem(processItem.getProperty().getId(), version);
             }
             final String label = processItem.getProperty().getLabel();
+            ITalendProcessJavaProject talendJavaProject = getRunProcessService()
+                    .getTalendJobJavaProject(processItem.getProperty());
             final IBuildJobHandler buildJobHandler = BuildJobFactory.createBuildJobHandler(processItem, context, version,
                     exportChoiceMap, jobExportType);
             final IWorkspaceRunnable op = new IWorkspaceRunnable() {
@@ -254,6 +256,12 @@ public class BuildJobManager {
                             throw new OperationCanceledException(Messages.getString("BuildJobManager.operationCanceled")); //$NON-NLS-1$
                         }
 
+                        if (jobExportType == JobExportType.IMAGE) {
+                            IFile logFile = talendJavaProject.getProject().getFile("lastGenerated.log");
+                            if (logFile.exists()) {
+                                logFile.delete(true, false, wrMonitor);
+                            }
+                        }
                         buildJobHandler.build(new SubProgressMonitor(wrMonitor, scale));
                         TimeMeasure.step(timeMeasureId, "build and package"); //$NON-NLS-1$
                         if (wrMonitor.isCanceled()) {
@@ -281,78 +289,73 @@ public class BuildJobManager {
                 }
                 throw new PersistenceException(cause);
             }
-            File targetFile;
-            if (jobExportType == JobExportType.IMAGE) {
-                targetFile = buildJobHandler.getTargetFolder().getFolder("docker").getLocation().toFile(); //$NON-NLS-1$
-            } else {
-                targetFile = buildJobHandler.getJobTargetFile().getLocation().toFile();
-            }
-            if (targetFile != null && targetFile.exists()) {
-                if (jobExportType != JobExportType.IMAGE) {
+            String mvnLogFilePath = talendJavaProject.getProject().getFile("lastGenerated.log").getLocation() //$NON-NLS-1$
+                    .toPortableString();
+            String causeMsg = Messages.getString("BuildJobManager.mavenErrorMessage", mvnLogFilePath); //$NON-NLS-1$
+            String logMsg = getLogErrorMsg(mvnLogFilePath); // $NON-NLS-1$
+
+            if (jobExportType != JobExportType.IMAGE) {
+                File targetFile = buildJobHandler.getJobTargetFile().getLocation().toFile();
+                if (targetFile != null && targetFile.exists()) {
                     File jobZipFile = targetFile;
                     String jobZip = targetFile.toString();
-                    if (jobExportType != JobExportType.IMAGE) {
-                        if (needClasspathJar(exportChoiceMap)) {
-                            ExportJobUtil.deleteTempFiles();
-                            JavaJobExportReArchieveCreator creator = new JavaJobExportReArchieveCreator(jobZip, label);
-                            FilesUtils.unzip(jobZip, creator.getTmpFolder() + File.separator + label + "_" + version);
-                            creator.buildNewJar();
-                            ZipToFile.zipFile(creator.getTmpFolder(), jobZip);
-                            creator.deleteTempFiles();
-                            TimeMeasure.step(timeMeasureId, "Recreate job jar for classpath");
-                        }
-
-                        if (!Boolean.parseBoolean(exportChoiceMap.get(ExportChoice.binaries).toString())) {
-                            // tup-19705 refresh export root pom to support use mvn package directly
-                            List<String> itemLabels = new ArrayList<String>();
-                            itemLabels.add(label);
-                            ExportJobUtil.deleteTempFiles();
-                            String temUnzipPath = ExportJobUtil.getTmpFolder() + File.separator + label + "_" + version;
-                            FilesUtils.unzip(jobZip, temUnzipPath);
-                            // arrange zip structure
-                            File rootPom = new File(temUnzipPath + File.separator + TalendMavenConstants.POM_FILE_NAME);
-                            Model pomModel = MavenPlugin.getMavenModelManager().readMavenModel(rootPom);
-                            File itemFile = new File(temUnzipPath + File.separator + label);
-                            File newItemFile = new File(
-                                    temUnzipPath + File.separator + getArrangedJobPath(pomModel, label, version));
-                            if (itemFile.exists()) {
-                                File[] jarFiles = itemFile.listFiles(FilesUtils.getAcceptJARFilesFilter());
-                                for (File jarfile : jarFiles) {
-                                    FilesUtils.deleteFile(jarfile, true);
-                                }
-                                FileCopyUtils.syncFolder(itemFile, newItemFile, false);
-                                FilesUtils.deleteFolder(itemFile, true);
-                            }
-                            packageSubJob(temUnzipPath, pomModel, rootPom, processItem, null);
-                            refreshExportRootPom(temUnzipPath, rootPom);
-
-                            ZipToFile.zipFile(ExportJobUtil.getTmpFolder(), jobZip);
-                            ExportJobUtil.deleteTempFiles();
-                        }
-                        
-                        File jobFileTarget = new File(destinationPath);
-                        if (jobFileTarget.isDirectory()) {
-                            jobFileTarget = new File(destinationPath, jobZipFile.getName());
-                        }
-                        FilesUtils.copyFile(jobZipFile, jobFileTarget);
-                        TimeMeasure.step(timeMeasureId, "Copy packaged file to target");
+                    if (needClasspathJar(exportChoiceMap)) {
+                        ExportJobUtil.deleteTempFiles();
+                        JavaJobExportReArchieveCreator creator = new JavaJobExportReArchieveCreator(jobZip, label);
+                        FilesUtils.unzip(jobZip, creator.getTmpFolder() + File.separator + label + "_" + version);
+                        creator.buildNewJar();
+                        ZipToFile.zipFile(creator.getTmpFolder(), jobZip);
+                        creator.deleteTempFiles();
+                        TimeMeasure.step(timeMeasureId, "Recreate job jar for classpath");
                     }
+                    if (!Boolean.parseBoolean(exportChoiceMap.get(ExportChoice.binaries).toString())) {
+                        // tup-19705 refresh export root pom to support use mvn package directly
+                        List<String> itemLabels = new ArrayList<String>();
+                        itemLabels.add(label);
+                        ExportJobUtil.deleteTempFiles();
+                        String temUnzipPath = ExportJobUtil.getTmpFolder() + File.separator + label + "_" + version;
+                        FilesUtils.unzip(jobZip, temUnzipPath);
+                        // arrange zip structure
+                        File rootPom = new File(temUnzipPath + File.separator + TalendMavenConstants.POM_FILE_NAME);
+                        Model pomModel = MavenPlugin.getMavenModelManager().readMavenModel(rootPom);
+                        File itemFile = new File(temUnzipPath + File.separator + label);
+                        File newItemFile = new File(temUnzipPath + File.separator + getArrangedJobPath(pomModel, label, version));
+                        if (itemFile.exists()) {
+                            File[] jarFiles = itemFile.listFiles(FilesUtils.getAcceptJARFilesFilter());
+                            for (File jarfile : jarFiles) {
+                                FilesUtils.deleteFile(jarfile, true);
+                            }
+                            FileCopyUtils.syncFolder(itemFile, newItemFile, false);
+                            FilesUtils.deleteFolder(itemFile, true);
+                        }
+                        packageSubJob(temUnzipPath, pomModel, rootPom, processItem, null);
+                        refreshExportRootPom(temUnzipPath, rootPom);
+
+                        ZipToFile.zipFile(ExportJobUtil.getTmpFolder(), jobZip);
+                        ExportJobUtil.deleteTempFiles();
+                    }
+
+                    File jobFileTarget = new File(destinationPath);
+                    if (jobFileTarget.isDirectory()) {
+                        jobFileTarget = new File(destinationPath, jobZipFile.getName());
+                    }
+                    FilesUtils.copyFile(jobZipFile, jobFileTarget);
+                    TimeMeasure.step(timeMeasureId, "Copy packaged file to target");
+                } else {
+                    for (String line : logMsg.split("\n")) { //$NON-NLS-1$
+                        if (line.startsWith("[ERROR] Tests run")) { //$NON-NLS-1$
+                            causeMsg += ". There exists test case job failure."; //$NON-NLS-1$
+                            break;
+                        }
+                    }
+                    throw new Exception(Messages.getString("BuildJobManager.mavenErrorMessage", mvnLogFilePath) + "\n" + logMsg, //$NON-NLS-1$
+                            new Throwable(causeMsg));
                 }
             } else {
-                ITalendProcessJavaProject talendJavaProject = getRunProcessService()
-                        .getTalendJobJavaProject(processItem.getProperty());
-                String mvnLogFilePath = talendJavaProject.getProject().getFile("lastGenerated.log").getLocation() //$NON-NLS-1$
-                        .toPortableString();
-                String causeMsg = Messages.getString("BuildJobManager.mavenErrorMessage", mvnLogFilePath); //$NON-NLS-1$
-                String logMsg = getLogErrorMsg(mvnLogFilePath); // $NON-NLS-1$
-                for (String line : logMsg.split("\n")) { //$NON-NLS-1$
-                    if (line.startsWith("[ERROR] Tests run")) { //$NON-NLS-1$
-                        causeMsg += ". There exists test case job failure."; //$NON-NLS-1$
-                        break;
-                    }
+                if (logMsg != null) {
+                    throw new Exception(Messages.getString("BuildJobManager.mavenErrorMessage", mvnLogFilePath) + "\n" + logMsg, //$NON-NLS-1$ //$NON-NLS-2$
+                            new Throwable(causeMsg));
                 }
-                throw new Exception(Messages.getString("BuildJobManager.mavenErrorMessage", mvnLogFilePath) + "\n" + logMsg, //$NON-NLS-1$
-                        new Throwable(causeMsg));
             }
             if (checkCompilationError) {
                 CorePlugin.getDefault().getRunProcessService().checkLastGenerationHasCompilationError(false);

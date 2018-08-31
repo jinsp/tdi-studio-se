@@ -23,6 +23,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.Profile;
 import org.eclipse.core.resources.IFile;
@@ -352,7 +353,7 @@ public class BuildJobManager {
                             new Throwable(causeMsg));
                 }
             } else {
-                if (logMsg != null) {
+                if (!StringUtils.isBlank(logMsg)) {
                     throw new Exception(Messages.getString("BuildJobManager.mavenErrorMessage", mvnLogFilePath) + "\n" + logMsg, //$NON-NLS-1$ //$NON-NLS-2$
                             new Throwable(causeMsg));
                 }
